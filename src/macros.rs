@@ -2,8 +2,8 @@
 
 #[macro_export]
 macro_rules! csi {
-    ($($item:expr),+ $(,)?) => {
-        concat!("\x1b[", $($item),+)
+    ($($item:expr),*) => {
+        concat!("\x1b[", $($item),*)
     }
 }
 
@@ -17,7 +17,7 @@ macro_rules! write {
         $writer.write_all(
             format_args!($format, $($item),+)
                 .as_str()
-                .expect("should format arguments")
+                .expect(concat!("should format arguments `", $format, "`"))
                 .as_bytes()
         )
     };
