@@ -1,0 +1,18 @@
+[package]
+name = "noterm"
+version = "0.1.0"
+edition = "2024"
+authors = ["Julien Peeters <inthehack@mountainhacks.org>"]
+license = "Apache-2.0 OR MIT"
+homepage = "https://github.com/inthehack/noshell"
+repository = "https://github.com/inthehack/noshell"
+description = "noshell, a no_std argument parser and a shell for constrained systems."
+readme = "README.md"
+
+[dependencies]
+defmt = { version = "1.0.1", optional = true }
+heapless = "0.8.0"
+thiserror = { version = "2.0.11", default-features = false }
+
+[dev-dependencies]
+speculoos = "0.13.0"
