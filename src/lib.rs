@@ -1,61 +1,60 @@
 //! noterm, a no-std crate for interacting with terminal.
 
 #![cfg_attr(not(test), no_std)]
-#![allow(async_fn_in_trait)]
 
 use core::fmt;
 
 mod macros;
 
+pub mod io;
 pub mod terminal;
-
-/// Reader trait.
-pub trait Read {
-    type Error: fmt::Debug;
-
-    async fn read(&mut self, data: &mut [u8]) -> Result<usize, Self::Error>;
-
-    async fn read_all(&mut self, mut data: &mut [u8]) -> Result<(), Self::Error> {
-        while !data.is_empty() {
-            let count = self.read(data).await?;
-            data = &mut data[count..];
-        }
-        Ok(())
-    }
-}
-
-impl<ValueTy: Read> Read for &mut ValueTy {
-    type Error = ValueTy::Error;
-
-    async fn read(&mut self, data: &mut [u8]) -> Result<usize, Self::Error> {
-        ValueTy::read(*self, data).await
-    }
-}
-
-/// Writer trait.
-pub trait Write {
-    type Error: fmt::Debug;
-
-    async fn write(&mut self, data: &[u8]) -> Result<usize, Self::Error>;
-
-    async fn write_all(&mut self, mut data: &[u8]) -> Result<(), Self::Error> {
-        while !data.is_empty() {
-            let count = self.write(data).await?;
-            data = &data[count..];
-        }
-        Ok(())
-    }
-}
-
-impl<ValueTy: Write> Write for &mut ValueTy {
-    type Error = ValueTy::Error;
-
-    async fn write(&mut self, data: &[u8]) -> Result<usize, Self::Error> {
-        ValueTy::write(*self, data).await
-    }
-}
 
 /// Command trait.
 pub trait Command {
-    async fn write<WriterTy: Write>(&self, writer: &mut WriterTy) -> Result<(), WriterTy::Error>;
+    fn write(&self, writer: &mut impl fmt::Write) -> fmt::Result;
+}
+
+pub trait Executable {
+    fn execute(&mut self, command: impl Command) -> io::Result<&mut Self>;
+}
+
+impl<WriterTy: io::Write> Executable for WriterTy {
+    fn execute(&mut self, command: impl Command) -> io::Result<&mut Self> {
+        command_write_ansi(self, command)?;
+        Ok(self)
+    }
+}
+
+fn command_write_ansi<WriterTy: io::Write, CommandTy: Command>(
+    writer: &mut WriterTy,
+    command: CommandTy,
+) -> io::Result<()> {
+    struct Adapter<Ty> {
+        inner: Ty,
+        result: io::Result<()>,
+    }
+
+    impl<Ty: io::Write> fmt::Write for Adapter<Ty> {
+        fn write_str(&mut self, s: &str) -> fmt::Result {
+            match self.inner.write_all(s.as_bytes()) {
+                Ok(_) => Ok(()),
+                Err(err) => {
+                    self.result = Err(err);
+                    Err(fmt::Error)
+                }
+            }
+        }
+    }
+
+    let mut adapter = Adapter {
+        inner: writer,
+        result: Ok(()),
+    };
+
+    command
+        .write(&mut adapter)
+        .map_err(|_| match adapter.result {
+            Ok(()) => panic!("command write incorrectly errored"),
+            Err(err) => err,
+        })
 }

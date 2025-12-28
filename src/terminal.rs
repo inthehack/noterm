@@ -1,10 +1,12 @@
 //! Teriminal module.
 
 #![allow(async_fn_in_trait)]
+#![allow(dead_code)]
 
-use core::fmt::Debug;
+use core::fmt;
 
-use crate::{Command, Read, Write, csi, write};
+use crate::io;
+use crate::{Command, csi};
 
 /// Terminal config.
 #[derive(Clone, Debug)]
@@ -24,7 +26,7 @@ pub struct Terminal<IO> {
 
 impl<IO> Terminal<IO>
 where
-    IO: Read + Write,
+    IO: io::Read + io::Write,
 {
     /// Create a new terminal with the fiven I/O.
     pub fn new(io: IO) -> Self {
@@ -44,12 +46,6 @@ where
             size,
             cursor: (0, 0),
         }
-    }
-
-    /// Execute command.
-    pub async fn execute(&mut self, action: impl Command) -> Result<(), Error> {
-        action.write(&mut self.io).await.ok();
-        Ok(())
     }
 }
 
@@ -75,51 +71,49 @@ pub enum Action {
 }
 
 impl Command for Action {
-    async fn write<WriterTy: Write>(&self, writer: &mut WriterTy) -> Result<(), WriterTy::Error> {
-        match self {
-            Action::ClearAll => write!(writer, csi!("2J")).await,
-            Action::ClearLine => write!(writer, csi!("2K")).await,
-            Action::ClearCursorUp => write!(writer, csi!("1J")).await,
-            Action::ClearCursorDown => write!(writer, csi!("0J")).await,
-            Action::ScrollUpBy(count) => write!(writer, "\x1b[{}S", count).await,
-            Action::ScrollDownBy(count) => write!(writer, csi!("{}T"), count).await,
+    fn write(&self, writer: &mut impl fmt::Write) -> fmt::Result {
+        match *self {
+            Action::ClearAll => writer.write_str(csi!("2J")),
+            Action::ClearLine => writer.write_str(csi!("2K")),
+            Action::ClearCursorUp => writer.write_str(csi!("1J")),
+            Action::ClearCursorDown => writer.write_str(csi!("0J")),
+            Action::ScrollUpBy(count) => write!(writer, csi!("{}S"), count),
+            Action::ScrollDownBy(count) => write!(writer, csi!("{}T"), count),
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use core::fmt::Write;
-
     use speculoos::prelude::*;
+
+    use crate::Executable;
 
     use super::*;
 
-    impl crate::Write for String {
-        type Error = std::fmt::Error;
-
-        async fn write(&mut self, data: &[u8]) -> Result<usize, Self::Error> {
-            self.write_str(str::from_utf8(data).unwrap())?;
+    impl crate::io::Write for String {
+        fn write(&mut self, data: &[u8]) -> io::Result<usize> {
+            self.push_str(str::from_utf8(data).unwrap());
             Ok(data.len())
         }
     }
 
-    #[tokio::test]
-    async fn it_should_write_clear_all_action() {
+    #[test]
+    fn it_should_write_clear_all_action() {
         let action = Action::ClearAll;
         let mut buffer = String::default();
 
-        let result = action.write(&mut buffer).await;
+        let result = buffer.execute(action);
         assert_that!(result).is_ok();
         assert_that!(buffer.as_str()).is_equal_to(csi!("2J"));
     }
 
-    #[tokio::test]
-    async fn it_should_write_scroll_up_by_action() {
+    #[test]
+    fn it_should_write_scroll_up_by_action() {
         let action = Action::ScrollUpBy(32);
         let mut buffer = String::default();
 
-        let result = action.write(&mut buffer).await;
+        let result = buffer.execute(action);
         assert_that!(result).is_ok();
         assert_that!(buffer.as_str()).is_equal_to(csi!("32S"));
     }
