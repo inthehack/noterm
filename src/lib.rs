@@ -6,6 +6,7 @@ use core::fmt;
 
 mod macros;
 
+pub mod cursor;
 pub mod io;
 pub mod terminal;
 
