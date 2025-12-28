@@ -14,13 +14,25 @@ pub trait Command {
     fn write(&self, writer: &mut impl fmt::Write) -> fmt::Result;
 }
 
+pub trait Queuable {
+    fn queue(&mut self, command: impl Command) -> io::Result<&mut Self>;
+}
+
 pub trait Executable {
     fn execute(&mut self, command: impl Command) -> io::Result<&mut Self>;
 }
 
+impl<WriterTy: io::Write> Queuable for WriterTy {
+    fn queue(&mut self, command: impl Command) -> io::Result<&mut Self> {
+        command_write_ansi(self, command)?;
+        Ok(self)
+    }
+}
+
 impl<WriterTy: io::Write> Executable for WriterTy {
     fn execute(&mut self, command: impl Command) -> io::Result<&mut Self> {
-        command_write_ansi(self, command)?;
+        self.queue(command)?;
+        self.flush()?;
         Ok(self)
     }
 }

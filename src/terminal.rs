@@ -62,10 +62,13 @@ pub enum Error {
 #[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Action {
-    ClearAll,
-    ClearLine,
-    ClearCursorUp,
     ClearCursorDown,
+    ClearCursorUp,
+    ClearScreen,
+    ClearSaved,
+    ClearLineFromCursor,
+    ClearLineToCursor,
+    ClearLine,
     ScrollUpBy(u16),
     ScrollDownBy(u16),
 }
@@ -73,10 +76,13 @@ pub enum Action {
 impl Command for Action {
     fn write(&self, writer: &mut impl fmt::Write) -> fmt::Result {
         match *self {
-            Action::ClearAll => writer.write_str(csi!("2J")),
-            Action::ClearLine => writer.write_str(csi!("2K")),
+            Action::ClearCursorDown => writer.write_str(csi!("J")),
             Action::ClearCursorUp => writer.write_str(csi!("1J")),
-            Action::ClearCursorDown => writer.write_str(csi!("0J")),
+            Action::ClearScreen => writer.write_str(csi!("2J")),
+            Action::ClearSaved => writer.write_str(csi!("3J")),
+            Action::ClearLineFromCursor => writer.write_str(csi!("K")),
+            Action::ClearLineToCursor => writer.write_str(csi!("1K")),
+            Action::ClearLine => writer.write_str(csi!("2K")),
             Action::ScrollUpBy(count) => write!(writer, csi!("{}S"), count),
             Action::ScrollDownBy(count) => write!(writer, csi!("{}T"), count),
         }
@@ -95,6 +101,10 @@ mod tests {
         fn write(&mut self, data: &[u8]) -> io::Result<usize> {
             self.push_str(str::from_utf8(data).unwrap());
             Ok(data.len())
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
         }
     }
 

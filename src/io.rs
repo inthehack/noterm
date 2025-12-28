@@ -34,6 +34,7 @@ impl<ReaderTy: Read> Read for &mut ReaderTy {
 /// Writer trait.
 pub trait Write {
     fn write(&mut self, data: &[u8]) -> Result<usize>;
+    fn flush(&mut self) -> Result<()>;
 
     fn write_all(&mut self, mut data: &[u8]) -> Result<()> {
         while !data.is_empty() {
@@ -48,5 +49,10 @@ impl<WriterTy: Write> Write for &mut WriterTy {
     #[inline]
     fn write(&mut self, data: &[u8]) -> Result<usize> {
         WriterTy::write(*self, data)
+    }
+
+    #[inline]
+    fn flush(&mut self) -> Result<()> {
+        WriterTy::flush(*self)
     }
 }
