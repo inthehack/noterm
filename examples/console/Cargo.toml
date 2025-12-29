@@ -1,0 +1,42 @@
+[package]
+name = "console"
+version = "0.1.0"
+edition = "2024"
+
+[profile.dev]
+opt-level = "z"
+
+[profile.release]
+opt-level = "z"
+lto = "fat"
+debug = false
+debug-assertions = false
+overflow-checks = false
+
+[dependencies]
+cortex-m = { version = "0.7.7", features = [
+  "critical-section",
+  "critical-section-single-core",
+] }
+cortex-m-rt = "0.7.5"
+embassy-stm32 = { version = "0.4.0", features = [
+  "stm32u5a5zj",
+  "memory-x",
+  "rt",
+  "defmt",
+  "time",
+  "time-driver-any",
+] }
+
+defmt = "1.0.1"
+defmt-rtt = "1.1.0"
+panic-probe = { version = "1.0.0", features = ["print-defmt"] }
+embassy-executor = { version = "0.9.1", features = ["arch-cortex-m", "executor-thread", "defmt"] }
+
+noterm = { path = "../.." }
+futures = { version = "0.3.31", default-features = false }
+nom = { version = "8.0.0", default-features = false }
+embassy-futures = { version = "0.1.2", features = ["defmt"] }
+
+[build-dependencies]
+anyhow = "1.0.100"

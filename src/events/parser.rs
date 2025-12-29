@@ -1,14 +1,83 @@
 //! Parser.
 
+// use core::pin::Pin;
+// use core::task::{Context, Poll};
+
+// use futures::{Stream, pin_mut};
+// use heapless::Vec;
 use nom::branch::alt;
 use nom::bytes::streaming::tag;
 use nom::character::streaming::{anychar, char, digit1};
 use nom::combinator::{map, map_res};
 use nom::error::{Error, ErrorKind};
 use nom::sequence::preceded;
-use nom::{IResult, Parser};
+use nom::{IResult, Parser as _};
 
 use crate::events::{CursorEvent, Event, KeyCode, KeyEvent, KeyModifiers, ScreenEvent};
+// use crate::io;
+
+// pub struct Parser<ReaderTy> {
+//     reader: ReaderTy,
+//     buffer: Vec<u8, 32>,
+//     cursor: usize,
+// }
+
+// impl<ReaderTy: io::Read> Parser<ReaderTy> {
+//     pub fn new(reader: ReaderTy) -> Self {
+//         Parser {
+//             reader,
+//             buffer: Default::default(),
+//             cursor: 0,
+//         }
+//     }
+// }
+
+// impl<ReaderTy: io::Read + Unpin> Stream for Parser<ReaderTy>
+// where
+//     Self: Unpin,
+// {
+//     type Item = io::Result<Event>;
+
+//     async fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+//         let reader = Pin::new(&mut self.reader);
+//         let fut = reader.read(&mut self.buffer[self.cursor..]);
+//         pin_mut!(fut);
+
+//         let amount = match fut.poll(cx) {
+//             Poll::Pending => return Poll::Pending,
+//             Poll::Ready(Ok(amount)) => amount,
+//             Poll::Ready(Err(_)) => return Poll::Ready(Some(Err(io::Error::Unknown))),
+//         };
+
+//         self.cursor += amount;
+
+//         let Ok(input) = str::from_utf8(&self.buffer[..self.cursor]) else {
+//             self.cursor = 0;
+//             return Poll::Pending;
+//         };
+
+//         match parse(input) {
+//             Ok((rest, event)) => {
+//                 if rest.is_empty() {
+//                     self.cursor = 0;
+//                 } else {
+//                     self.cursor -= rest.len();
+//                 }
+
+//                 Poll::Ready(Some(Ok(event)))
+//             }
+
+//             Err(nom::Err::Incomplete(_)) => Poll::Pending,
+
+//             Err(nom::Err::Error(_)) => {
+//                 self.cursor = 0;
+//                 Poll::Pending
+//             }
+
+//             Err(nom::Err::Failure(_)) => Poll::Ready(Some(Err(io::Error::Unknown))),
+//         }
+//     }
+// }
 
 pub fn parse(input: &str) -> IResult<&str, Event> {
     alt((
@@ -57,6 +126,7 @@ pub(crate) fn parse_csi_escape_code(input: &str) -> IResult<&str, Event> {
     preceded(
         tag("\x1b["),
         alt((
+            map(char('\x1b'), |_| Event::Key(KeyCode::Escape.into())),
             map(char('A'), |_| Event::Key(KeyCode::Up.into())),
             map(char('B'), |_| Event::Key(KeyCode::Down.into())),
             map(char('C'), |_| Event::Key(KeyCode::Right.into())),

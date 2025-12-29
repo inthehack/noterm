@@ -24,14 +24,14 @@ pub trait Executable {
     fn execute(&mut self, command: impl Command) -> io::Result<&mut Self>;
 }
 
-impl<WriterTy: io::Write> Queuable for WriterTy {
+impl<WriterTy: io::blocking::Write> Queuable for WriterTy {
     fn queue(&mut self, command: impl Command) -> io::Result<&mut Self> {
         command_write_ansi(self, command)?;
         Ok(self)
     }
 }
 
-impl<WriterTy: io::Write> Executable for WriterTy {
+impl<WriterTy: io::blocking::Write> Executable for WriterTy {
     fn execute(&mut self, command: impl Command) -> io::Result<&mut Self> {
         self.queue(command)?;
         self.flush()?;
@@ -39,7 +39,7 @@ impl<WriterTy: io::Write> Executable for WriterTy {
     }
 }
 
-fn command_write_ansi<WriterTy: io::Write, CommandTy: Command>(
+fn command_write_ansi<WriterTy: io::blocking::Write, CommandTy: Command>(
     writer: &mut WriterTy,
     command: CommandTy,
 ) -> io::Result<()> {
@@ -48,7 +48,7 @@ fn command_write_ansi<WriterTy: io::Write, CommandTy: Command>(
         result: io::Result<()>,
     }
 
-    impl<Ty: io::Write> fmt::Write for Adapter<Ty> {
+    impl<Ty: io::blocking::Write> fmt::Write for Adapter<Ty> {
         fn write_str(&mut self, s: &str) -> fmt::Result {
             match self.inner.write_all(s.as_bytes()) {
                 Ok(_) => Ok(()),

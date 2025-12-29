@@ -3,6 +3,10 @@
 use bitflags::bitflags;
 
 pub mod parser;
+pub mod stream;
+
+// pub use parser::Parser;
+pub use parser::parse;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Event {
