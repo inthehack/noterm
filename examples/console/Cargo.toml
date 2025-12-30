@@ -31,12 +31,15 @@ embassy-stm32 = { version = "0.4.0", features = [
 defmt = "1.0.1"
 defmt-rtt = "1.1.0"
 panic-probe = { version = "1.0.0", features = ["print-defmt"] }
-embassy-executor = { version = "0.9.1", features = ["arch-cortex-m", "executor-thread", "defmt"] }
 
-noterm = { path = "../.." }
-futures = { version = "0.3.31", default-features = false }
-nom = { version = "8.0.0", default-features = false }
+embassy-executor = { version = "0.9.1", features = ["arch-cortex-m", "executor-thread", "defmt"] }
 embassy-futures = { version = "0.1.2", features = ["defmt"] }
+futures = { version = "0.3.31", default-features = false }
+
+anyhow = { version = "1.0.100", default-features = false }
+nom = { version = "8.0.0", default-features = false }
+
+noterm = { path = "../..", features = ["defmt"] }
 
 [build-dependencies]
 anyhow = "1.0.100"

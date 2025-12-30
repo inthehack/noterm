@@ -1,8 +1,6 @@
 #![no_std]
 #![no_main]
 
-use futures::stream::StreamExt;
-
 use embassy_executor::Spawner;
 use embassy_stm32 as hal;
 
@@ -22,7 +20,7 @@ async fn main(_spawner: Spawner) {
         let mut config = hal::usart::Config::default();
         config.baudrate = 115200;
 
-        hal::usart::Uart::new(
+        let device = hal::usart::Uart::new(
             periphs.USART1,
             periphs.PA10,
             periphs.PA9,
@@ -31,19 +29,20 @@ async fn main(_spawner: Spawner) {
             periphs.GPDMA1_CH9,
             config,
         )
-        .expect("should be a valid usart1 config")
-    };
+        .expect("should be a valid usart1 config");
 
-    let mut uart = Uart::new(uart);
+        Uart::new(device)
+    };
 
     uart.queue(noterm::terminal::Action::ClearScreen)
         .expect("queued")
         .queue(noterm::cursor::Action::MoveTo { row: 0, column: 0 })
         .expect("queued")
-        .flush();
+        .flush()
+        .expect("flushed");
 
-    uart.write(b"Hello World\r\n");
-    uart.flush();
+    uart.write(b"Hello World\r\n").expect("written");
+    uart.flush().expect("flushed");
 
     let mut buffer = [0u8; 32];
     let mut rpos = 0;
@@ -66,10 +65,6 @@ async fn main(_spawner: Spawner) {
             continue;
         };
 
-        defmt::println!("wpos: {}, rpos: {}", wpos, rpos);
-        defmt::println!("input: {:?}", input.as_bytes());
-        defmt::println!("buffer: {:?}", buffer);
-
         loop {
             if input.is_empty() {
                 wpos = 0;
@@ -79,12 +74,13 @@ async fn main(_spawner: Spawner) {
 
             let event = match noterm::events::parse(input) {
                 Ok((rest, event)) => {
+                    rpos += input.len() - rest.len();
+
                     input = rest;
                     event
                 }
 
                 Err(nom::Err::Incomplete(_)) => {
-                    rpos = wpos - input.len();
                     break;
                 }
 

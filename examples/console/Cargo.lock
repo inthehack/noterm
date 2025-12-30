@@ -652,6 +652,7 @@ name = "noterm"
 version = "0.1.0"
 dependencies = [
  "bitflags 2.10.0",
+ "defmt 1.0.1",
  "futures",
  "heapless",
  "nom",

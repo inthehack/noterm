@@ -8,7 +8,7 @@
 use nom::branch::alt;
 use nom::bytes::streaming::tag;
 use nom::character::streaming::{anychar, char, digit1};
-use nom::combinator::{map, map_res};
+use nom::combinator::{map, map_res, peek};
 use nom::error::{Error, ErrorKind};
 use nom::sequence::preceded;
 use nom::{IResult, Parser as _};
@@ -81,14 +81,43 @@ use crate::events::{CursorEvent, Event, KeyCode, KeyEvent, KeyModifiers, ScreenE
 
 pub fn parse(input: &str) -> IResult<&str, Event> {
     alt((
-        char('\r').map(|_| Event::Key(KeyCode::Enter.into())),
-        char('\n').map(|_| Event::Key(KeyCode::Enter.into())),
-        char('\t').map(|_| Event::Key(KeyCode::Tab.into())),
-        char('\x7f').map(|_| Event::Key(KeyCode::Backspace.into())),
         parse_ss3_escape_code,
         parse_csi_escape_code,
+        parse_alt_modifier,
+        map(char('\r'), |_| Event::Key(KeyCode::Enter.into())),
+        map(char('\n'), |_| Event::Key(KeyCode::Enter.into())),
+        map(char('\t'), |_| Event::Key(KeyCode::Tab.into())),
+        map(char('\x7f'), |_| Event::Key(KeyCode::Backspace.into())),
+        parse_ctrl_modifier,
         parse_ascii_code,
     ))
+    .parse(input)
+}
+
+pub(crate) fn parse_alt_modifier(input: &str) -> IResult<&str, Event> {
+    map(preceded(char('\x1b'), parse), |event| {
+        if let Event::Key(key_event) = event {
+            Event::Key(key_event.with_modifiers(KeyModifiers::ALT))
+        } else {
+            event
+        }
+    })
+    .parse(input)
+}
+
+pub(crate) fn parse_ctrl_modifier(input: &str) -> IResult<&str, Event> {
+    map_res(anychar, |c| {
+        let keycode = match c {
+            '\x01'..='\x1a' => KeyCode::Char((c as u8 - 0x1 + b'a') as char),
+            '\x1c'..='\x1f' => KeyCode::Char((c as u8 - 0x1c + b'4') as char),
+            '\0' => KeyCode::Char(' '),
+            _ => return Err(Error::new(c, ErrorKind::Char)),
+        };
+
+        Ok(Event::Key(
+            KeyEvent::from(keycode).with_modifiers(KeyModifiers::CONTROL),
+        ))
+    })
     .parse(input)
 }
 
