@@ -43,7 +43,7 @@ impl Event {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum CursorEvent {
-    Updated { line: u16, column: u16 },
+    Updated { row: u16, column: u16 },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
