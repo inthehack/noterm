@@ -72,6 +72,14 @@ impl KeyEvent {
         self
     }
 
+    pub fn sanitize(mut self) -> Self {
+        if self.code == KeyCode::Tab && self.modifiers.contains(KeyModifiers::SHIFT) {
+            self.code = KeyCode::BackTab;
+        }
+
+        self
+    }
+
     pub fn is_key_pressed(&self) -> bool {
         self.kind == KeyEventKind::Pressed
     }

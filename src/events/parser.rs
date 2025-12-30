@@ -3,13 +3,15 @@
 // use core::pin::Pin;
 // use core::task::{Context, Poll};
 
+use core::num::ParseIntError;
+
 // use futures::{Stream, pin_mut};
 // use heapless::Vec;
 use nom::branch::alt;
 use nom::bytes::complete::take_until;
 use nom::bytes::streaming::tag;
 use nom::character::streaming::{anychar, char, digit1};
-use nom::combinator::{map, map_opt, map_res, opt};
+use nom::combinator::{map, map_opt, map_res, opt, success};
 use nom::error::{Error, ErrorKind};
 use nom::sequence::{preceded, separated_pair, terminated};
 use nom::{IResult, Parser as _};
@@ -83,6 +85,8 @@ use crate::events::{
 // }
 
 pub fn parse(input: &str) -> IResult<&str, Event> {
+    defmt::trace!("parse");
+
     alt((
         parse_ss3_escape_code,
         parse_csi_escape_code,
@@ -100,9 +104,11 @@ pub fn parse(input: &str) -> IResult<&str, Event> {
 }
 
 pub(crate) fn parse_alt_modifier(input: &str) -> IResult<&str, Event> {
+    defmt::trace!("parse_alt_modifier");
+
     map(preceded(char('\x1b'), parse), |event| {
         if let Event::Key(key_event) = event {
-            Event::Key(key_event.with_modifiers(KeyModifiers::ALT))
+            Event::Key(key_event.with_modifiers(KeyModifiers::ALT).sanitize())
         } else {
             event
         }
@@ -111,6 +117,8 @@ pub(crate) fn parse_alt_modifier(input: &str) -> IResult<&str, Event> {
 }
 
 pub(crate) fn parse_ctrl_modifier(input: &str) -> IResult<&str, Event> {
+    defmt::trace!("parse_ctrl_modifier");
+
     map_res(anychar, |c| {
         let keycode = match c {
             '\x01'..='\x1a' => KeyCode::Char((c as u8 - 0x1 + b'a') as char),
@@ -119,18 +127,25 @@ pub(crate) fn parse_ctrl_modifier(input: &str) -> IResult<&str, Event> {
             _ => return Err(Error::new(c, ErrorKind::Char)),
         };
 
-        Ok(Event::Key(
-            KeyEvent::from(keycode).with_modifiers(KeyModifiers::CONTROL),
-        ))
+        let key_event = if keycode == KeyCode::Char('h') {
+            KeyEvent::from(KeyCode::Backspace)
+        } else {
+            KeyEvent::from(keycode).with_modifiers(KeyModifiers::CONTROL)
+        };
+
+        Ok(Event::Key(key_event.sanitize()))
     })
     .parse(input)
 }
 
 pub(crate) fn parse_ascii(input: &str) -> IResult<&str, KeyEvent> {
+    defmt::trace!("parse_ascii");
+
     alt((map(anychar, |c| {
         if c.is_uppercase() {
             KeyEvent::from(KeyCode::Char((c as u8 - b'A' + b'a') as char))
                 .with_modifiers(KeyModifiers::SHIFT)
+                .sanitize()
         } else {
             KeyEvent::from(KeyCode::Char(c))
         }
@@ -139,6 +154,8 @@ pub(crate) fn parse_ascii(input: &str) -> IResult<&str, KeyEvent> {
 }
 
 pub(crate) fn parse_ss3_escape_code(input: &str) -> IResult<&str, Event> {
+    defmt::trace!("parse_ss3_escape_code");
+
     preceded(
         tag("\x1bO"),
         alt((
@@ -158,6 +175,8 @@ pub(crate) fn parse_ss3_escape_code(input: &str) -> IResult<&str, Event> {
 }
 
 pub(crate) fn parse_csi_escape_code(input: &str) -> IResult<&str, Event> {
+    defmt::trace!("parse_csi_escape_code");
+
     preceded(
         tag("\x1b["),
         alt((
@@ -169,20 +188,31 @@ pub(crate) fn parse_csi_escape_code(input: &str) -> IResult<&str, Event> {
             map(char('H'), |_| Event::Key(KeyCode::Home.into())),
             map(char('F'), |_| Event::Key(KeyCode::End.into())),
             map(char('Z'), |_| {
-                Event::Key(KeyEvent::from(KeyCode::BackTab).with_modifiers(KeyModifiers::SHIFT))
+                Event::Key(
+                    KeyEvent::from(KeyCode::BackTab)
+                        .with_modifiers(KeyModifiers::SHIFT)
+                        .sanitize(),
+                )
             }),
             map(char('I'), |_| Event::Screen(ScreenEvent::FocusGained)),
             map(char('O'), |_| Event::Screen(ScreenEvent::FocusLost)),
+            map(
+                preceded(char(';'), parse_csi_modifier_encoded_escape_code),
+                Event::Key,
+            ),
             map(parse_csi_function_key, Event::Key),
             map(parse_csi_special_key_code, Event::Key),
             map(parse_csi_u_encoded_escape_code, Event::Key),
             map(parse_csi_cursor_escape_code, Event::Cursor),
+            map(parse_csi_modifier_encoded_escape_code, Event::Key),
         )),
     )
     .parse(input)
 }
 
 pub(crate) fn parse_csi_function_key(input: &str) -> IResult<&str, KeyEvent> {
+    defmt::trace!("parse_funcion_key");
+
     map_res(
         (
             alt((char('1'), char('2'))),
@@ -203,6 +233,8 @@ pub(crate) fn parse_csi_function_key(input: &str) -> IResult<&str, KeyEvent> {
 }
 
 pub(crate) fn parse_csi_cursor_escape_code(input: &str) -> IResult<&str, CursorEvent> {
+    defmt::trace!("parse_csi_cursor_escape_code");
+
     terminated(
         separated_pair(
             map_res(digit1, |s: &str| s.parse::<u16>()),
@@ -216,13 +248,15 @@ pub(crate) fn parse_csi_cursor_escape_code(input: &str) -> IResult<&str, CursorE
 }
 
 pub(crate) fn parse_csi_special_key_code(input: &str) -> IResult<&str, KeyEvent> {
+    defmt::trace!("parse_csi_special_key_code");
+
     terminated(
         map(
             (
                 map_opt(digit1, |s: &str| {
                     s.parse::<u8>()
                         .ok()
-                        .and_then(parse_csi_special_key_code_value)
+                        .and_then(interpret_csi_special_key_code_value)
                         .map(KeyEvent::from)
                 }),
                 preceded(char(';'), parse_csi_u_modifiers),
@@ -231,6 +265,7 @@ pub(crate) fn parse_csi_special_key_code(input: &str) -> IResult<&str, KeyEvent>
                 key_event
                     .with_modifiers(key_modifiers)
                     .with_kind(key_event_kind)
+                    .sanitize()
             },
         ),
         char('~'),
@@ -238,35 +273,46 @@ pub(crate) fn parse_csi_special_key_code(input: &str) -> IResult<&str, KeyEvent>
     .parse(input)
 }
 
-pub(crate) fn parse_csi_special_key_code_value(value: u8) -> Option<KeyCode> {
-    match value {
-        1 | 7 => Some(KeyCode::Home),
-        2 => Some(KeyCode::Insert),
-        3 => Some(KeyCode::Delete),
-        4 | 8 => Some(KeyCode::End),
-        5 => Some(KeyCode::PageUp),
-        6 => Some(KeyCode::PageDown),
-        n @ 11..=15 => Some(KeyCode::Fn(n - 10)),
-        n @ 17..=21 => Some(KeyCode::Fn(n - 11)),
-        n @ 23..=26 => Some(KeyCode::Fn(n - 12)),
-        n @ 28..=29 => Some(KeyCode::Fn(n - 15)),
-        n @ 31..=34 => Some(KeyCode::Fn(n - 17)),
-        _ => None,
-    }
+pub(crate) fn interpret_csi_special_key_code_value(value: u8) -> Option<KeyCode> {
+    let keycode = match value {
+        1 | 7 => KeyCode::Home,
+        2 => KeyCode::Insert,
+        3 => KeyCode::Delete,
+        4 | 8 => KeyCode::End,
+        5 => KeyCode::PageUp,
+        6 => KeyCode::PageDown,
+        n @ 11..=15 => KeyCode::Fn(n - 10),
+        n @ 17..=21 => KeyCode::Fn(n - 11),
+        n @ 23..=26 => KeyCode::Fn(n - 12),
+        n @ 28..=29 => KeyCode::Fn(n - 15),
+        n @ 31..=34 => KeyCode::Fn(n - 17),
+        _ => return None,
+    };
+
+    Some(keycode)
 }
 
 pub(crate) fn parse_csi_u_encoded_escape_code(input: &str) -> IResult<&str, KeyEvent> {
+    defmt::trace!("parse_csi_u_encoded_escape_code");
+
     terminated(
         map(
             (
                 parse_csi_u_codepoint,
-                preceded(char(';'), parse_csi_u_modifiers),
+                preceded(
+                    char(';'),
+                    alt((
+                        parse_csi_u_modifiers,
+                        success((KeyModifiers::empty(), KeyEventKind::Pressed)),
+                    )),
+                ),
                 opt(preceded(char(';'), take_until("u"))),
             ),
             |(key_event, (key_modifiers, key_event_kind), _)| {
                 key_event
                     .with_modifiers(key_modifiers)
                     .with_kind(key_event_kind)
+                    .sanitize()
             },
         ),
         char('u'),
@@ -275,15 +321,29 @@ pub(crate) fn parse_csi_u_encoded_escape_code(input: &str) -> IResult<&str, KeyE
 }
 
 pub(crate) fn parse_csi_u_codepoint(input: &str) -> IResult<&str, KeyEvent> {
+    defmt::trace!("parse_csi_u_codepoint");
+
     map(
-        (parse_ascii, opt(preceded(char(':'), digit1))),
+        (
+            alt((
+                map(char('\x1b'), |_| KeyEvent::from(KeyCode::Escape)),
+                map(char('\r'), |_| KeyEvent::from(KeyCode::Enter)),
+                map(char('\n'), |_| KeyEvent::from(KeyCode::Enter)),
+                map(char('\t'), |_| KeyEvent::from(KeyCode::Tab)),
+                map(char('\x7f'), |_| KeyEvent::from(KeyCode::Backspace)),
+                parse_ascii,
+            )),
+            opt(preceded(char(':'), digit1)),
+        ),
         |(codepoint, _)| codepoint,
     )
     .parse(input)
 }
 
 pub(crate) fn parse_csi_u_modifiers(input: &str) -> IResult<&str, (KeyModifiers, KeyEventKind)> {
-    let parsed: IResult<_, _> = separated_pair(
+    defmt::trace!("parse_csi_u_modifiers");
+
+    separated_pair(
         map_res(digit1, |s: &str| {
             s.parse::<u8>().map(interpret_key_modifiers_from_mask)
         }),
@@ -292,9 +352,7 @@ pub(crate) fn parse_csi_u_modifiers(input: &str) -> IResult<&str, (KeyModifiers,
             s.parse::<u8>().map(interpret_key_event_kind_from_value)
         }),
     )
-    .parse(input);
-
-    Ok(parsed.unwrap_or_else(|_| (input, (KeyModifiers::empty(), KeyEventKind::Pressed))))
+    .parse(input)
 }
 
 pub(crate) fn interpret_key_modifiers_from_mask(mask: u8) -> KeyModifiers {
@@ -330,4 +388,56 @@ pub(crate) fn interpret_key_event_kind_from_value(value: u8) -> KeyEventKind {
         3 => KeyEventKind::Repeated,
         _ => KeyEventKind::Pressed,
     }
+}
+
+pub(crate) fn parse_csi_modifier_encoded_escape_code(input: &str) -> IResult<&str, KeyEvent> {
+    defmt::trace!("parse_csi_modifier_encoded_escape_code");
+
+    (
+        preceded(
+            take_until(";"),
+            preceded(
+                char(';'),
+                alt((
+                    parse_csi_u_modifiers,
+                    map_res(digit1, |s: &str| {
+                        Ok::<_, ParseIntError>((
+                            s.parse::<u8>().map(interpret_key_modifiers_from_mask)?,
+                            KeyEventKind::Pressed,
+                        ))
+                    }),
+                    success((KeyModifiers::empty(), KeyEventKind::Pressed)),
+                )),
+            ),
+        ),
+        map(
+            map_opt(anychar, interpret_modifier_key_code_value),
+            KeyEvent::from,
+        ),
+    )
+        .map(|((key_modifiers, key_event_kind), key_event)| {
+            key_event
+                .with_modifiers(key_modifiers)
+                .with_kind(key_event_kind)
+                .sanitize()
+        })
+        .parse(input)
+}
+
+pub(crate) fn interpret_modifier_key_code_value(value: char) -> Option<KeyCode> {
+    let keycode = match value {
+        'A' => KeyCode::Up,
+        'B' => KeyCode::Down,
+        'C' => KeyCode::Right,
+        'D' => KeyCode::Left,
+        'F' => KeyCode::End,
+        'H' => KeyCode::Home,
+        'P' => KeyCode::Fn(1),
+        'Q' => KeyCode::Fn(2),
+        'R' => KeyCode::Fn(3),
+        'S' => KeyCode::Fn(4),
+        _ => return None,
+    };
+
+    Some(keycode)
 }
