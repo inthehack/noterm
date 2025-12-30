@@ -6,14 +6,17 @@
 // use futures::{Stream, pin_mut};
 // use heapless::Vec;
 use nom::branch::alt;
+use nom::bytes::complete::take_until;
 use nom::bytes::streaming::tag;
 use nom::character::streaming::{anychar, char, digit1};
-use nom::combinator::{map, map_res, peek};
+use nom::combinator::{map, map_parser, map_res, opt};
 use nom::error::{Error, ErrorKind};
-use nom::sequence::preceded;
+use nom::sequence::{preceded, separated_pair, terminated};
 use nom::{IResult, Parser as _};
 
-use crate::events::{CursorEvent, Event, KeyCode, KeyEvent, KeyModifiers, ScreenEvent};
+use crate::events::{
+    CursorEvent, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, ScreenEvent,
+};
 // use crate::io;
 
 // pub struct Parser<ReaderTy> {
@@ -84,12 +87,9 @@ pub fn parse(input: &str) -> IResult<&str, Event> {
         parse_ss3_escape_code,
         parse_csi_escape_code,
         parse_alt_modifier,
-        map(char('\r'), |_| Event::Key(KeyCode::Enter.into())),
-        map(char('\n'), |_| Event::Key(KeyCode::Enter.into())),
-        map(char('\t'), |_| Event::Key(KeyCode::Tab.into())),
-        map(char('\x7f'), |_| Event::Key(KeyCode::Backspace.into())),
         parse_ctrl_modifier,
-        parse_ascii_code,
+        map(parse_csi_u_encoded_escape_code, Event::Key),
+        map(parse_ascii, Event::Key),
     ))
     .parse(input)
 }
@@ -121,14 +121,21 @@ pub(crate) fn parse_ctrl_modifier(input: &str) -> IResult<&str, Event> {
     .parse(input)
 }
 
-pub(crate) fn parse_ascii_code(input: &str) -> IResult<&str, Event> {
-    map(anychar, |c| {
-        if c.is_uppercase() {
-            Event::Key(KeyEvent::from(KeyCode::Char(c)).with_modifiers(KeyModifiers::SHIFT))
-        } else {
-            Event::Key(KeyCode::Char(c).into())
-        }
-    })
+pub(crate) fn parse_ascii(input: &str) -> IResult<&str, KeyEvent> {
+    alt((
+        map(char('\r'), |_| KeyEvent::from(KeyCode::Enter)),
+        map(char('\n'), |_| KeyEvent::from(KeyCode::Enter)),
+        map(char('\t'), |_| KeyEvent::from(KeyCode::Tab)),
+        map(char('\x7f'), |_| KeyEvent::from(KeyCode::Backspace)),
+        map(anychar, |c| {
+            if c.is_uppercase() {
+                KeyEvent::from(KeyCode::Char((c as u8 - b'A' + b'a') as char))
+                    .with_modifiers(KeyModifiers::SHIFT)
+            } else {
+                KeyEvent::from(KeyCode::Char(c))
+            }
+        }),
+    ))
     .parse(input)
 }
 
@@ -194,21 +201,6 @@ pub(crate) fn parse_csi_function_key(input: &str) -> IResult<&str, KeyEvent> {
     .parse(input)
 }
 
-// pub(crate) fn parse_csi_special_key(input: &str) -> IResult<&str, KeyEvent> {
-//     (
-//         map_res(digit1, |s: &str| s.parse::<u8>()),
-//         char(';'),
-//         parse_csi_key_modifiers_and_kind,
-//     )
-//         .map(|(code, _, (modifiers, kind))| {})
-//         .parse(input)
-// }
-
-// pub(crate) fn parse_csi_key_modifiers_and_kind(
-//     input: &str,
-// ) -> IResult<&str, (KeyModifiers, KeyEventKind)> {
-// }
-
 pub(crate) fn parse_csi_cursor_escape_code(input: &str) -> IResult<&str, CursorEvent> {
     (
         map_res(digit1, |s: &str| s.parse::<u16>()),
@@ -218,4 +210,92 @@ pub(crate) fn parse_csi_cursor_escape_code(input: &str) -> IResult<&str, CursorE
     )
         .map(|(line, _, column, _)| CursorEvent::Updated { line, column })
         .parse(input)
+}
+
+pub(crate) fn parse_csi_u_encoded_escape_code(input: &str) -> IResult<&str, KeyEvent> {
+    terminated(
+        preceded(
+            tag("\x1b["),
+            alt((
+                map(
+                    (
+                        parse_csi_u_codepoints,
+                        preceded(char(';'), parse_csi_u_modifiers),
+                    ),
+                    |(codepoint, modifiers)| (codepoint, modifiers),
+                ),
+                map(
+                    (
+                        parse_csi_u_codepoints,
+                        preceded(char(';'), parse_csi_u_modifiers),
+                        preceded(char(';'), take_until("u")),
+                    ),
+                    |(codepoint, modifiers, _)| (codepoint, modifiers),
+                ),
+            )),
+        ),
+        char('u'),
+    )
+    .map(|(key_event, (key_modifiers, key_event_kind))| {
+        key_event
+            .with_modifiers(key_modifiers)
+            .with_kind(key_event_kind)
+    })
+    .parse(input)
+}
+
+pub(crate) fn parse_csi_u_codepoints(input: &str) -> IResult<&str, KeyEvent> {
+    map(
+        (map_parser(digit1, parse_ascii), opt((char(':'), digit1))),
+        |(codepoint, _)| codepoint,
+    )
+    .parse(input)
+}
+
+pub(crate) fn parse_csi_u_modifiers(input: &str) -> IResult<&str, (KeyModifiers, KeyEventKind)> {
+    separated_pair(
+        map_res(digit1, |s: &str| {
+            s.parse::<u8>().map(interpret_key_modifiers_from_mask)
+        }),
+        char(':'),
+        map_res(digit1, |s: &str| {
+            s.parse::<u8>().map(interpret_key_event_kind_from_value)
+        }),
+    )
+    .parse(input)
+}
+
+pub(crate) fn interpret_key_modifiers_from_mask(mask: u8) -> KeyModifiers {
+    let mut modifiers = KeyModifiers::empty();
+
+    if mask & 1 != 0 {
+        modifiers |= KeyModifiers::SHIFT;
+    }
+
+    if mask & 2 != 0 {
+        modifiers |= KeyModifiers::ALT;
+    }
+
+    if mask & 4 != 0 {
+        modifiers |= KeyModifiers::CONTROL;
+    }
+
+    if mask & 8 != 0 {
+        modifiers |= KeyModifiers::SUPER;
+    }
+
+    if mask & 32 != 0 {
+        modifiers |= KeyModifiers::META;
+    }
+
+    modifiers
+}
+
+pub(crate) fn interpret_key_event_kind_from_value(value: u8) -> KeyEventKind {
+    match value {
+        1 => KeyEventKind::Pressed,
+        2 => KeyEventKind::Released,
+        3 => KeyEventKind::Repeated,
+        _ => KeyEventKind::Pressed,
+    }
 }
