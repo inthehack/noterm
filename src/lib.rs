@@ -9,6 +9,7 @@ mod macros;
 pub mod cursor;
 pub mod events;
 pub mod io;
+pub mod style;
 pub mod terminal;
 
 /// Command trait.

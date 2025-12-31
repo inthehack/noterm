@@ -65,12 +65,15 @@ pub enum Action {
     ClearCursorDown,
     ClearCursorUp,
     ClearScreen,
-    ClearSaved,
+    ClearHistory,
     ClearLineFromCursor,
     ClearLineToCursor,
     ClearLine,
-    ScrollUpBy(u16),
-    ScrollDownBy(u16),
+    ScrollUp(u16),
+    ScrollDown(u16),
+    SetSize { width: u16, height: u16 },
+    DisableLineWrapping,
+    EnableLineWrapping,
 }
 
 impl Command for Action {
@@ -79,12 +82,27 @@ impl Command for Action {
             Action::ClearCursorDown => writer.write_str(csi!("J")),
             Action::ClearCursorUp => writer.write_str(csi!("1J")),
             Action::ClearScreen => writer.write_str(csi!("2J")),
-            Action::ClearSaved => writer.write_str(csi!("3J")),
+            Action::ClearHistory => writer.write_str(csi!("3J")),
             Action::ClearLineFromCursor => writer.write_str(csi!("K")),
             Action::ClearLineToCursor => writer.write_str(csi!("1K")),
             Action::ClearLine => writer.write_str(csi!("2K")),
-            Action::ScrollUpBy(count) => write!(writer, csi!("{}S"), count),
-            Action::ScrollDownBy(count) => write!(writer, csi!("{}T"), count),
+
+            Action::ScrollUp(lines) if lines > 0 => write!(writer, csi!("{}S"), lines),
+            Action::ScrollDown(lines) if lines > 0 => write!(writer, csi!("{}T"), lines),
+
+            Action::SetSize { width, height } if width > 0 && height > 0 => {
+                write!(writer, csi!(""))
+            }
+
+            Action::DisableLineWrapping => write!(writer, csi!("?7l")),
+            Action::EnableLineWrapping => write!(writer, csi!("?7h")),
+
+            Action::ScrollUp(_)
+            | Action::ScrollDown(_)
+            | Action::SetSize {
+                width: _,
+                height: _,
+            } => Ok(()),
         }
     }
 }
@@ -120,7 +138,7 @@ mod tests {
 
     #[test]
     fn it_should_write_scroll_up_by_action() {
-        let action = Action::ScrollUpBy(32);
+        let action = Action::ScrollUp(32);
         let mut buffer = String::default();
 
         let result = buffer.execute(action);
