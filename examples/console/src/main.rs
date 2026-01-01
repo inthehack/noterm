@@ -9,8 +9,13 @@ use hal::mode::Async;
 
 use {defmt_rtt as _, panic_probe as _};
 
+use noterm::cursor::{Home, MoveToNextLine};
+use noterm::style::{Color, Print};
+use noterm::terminal::{Clear, ClearType};
+
 use noterm::Queuable as _;
 use noterm::io::blocking::Write as _;
+use noterm::style::Stylized as _;
 
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
@@ -34,15 +39,21 @@ async fn main(_spawner: Spawner) {
         Uart::new(device)
     };
 
-    uart.queue(noterm::terminal::Action::ClearScreen)
+    uart.queue(Clear(ClearType::All))
         .expect("queued")
-        .queue(noterm::cursor::Action::MoveTo { row: 0, column: 0 })
+        .queue(Home)
         .expect("queued")
         .flush()
         .expect("flushed");
 
-    uart.write(b"Hello World\r\n").expect("written");
-    uart.flush().expect("flushed");
+    uart.queue(Print("Hello World".bold()))
+        .expect("queued")
+        .queue(MoveToNextLine(2))
+        .expect("queued")
+        .queue(Print("Let's start!".fg(Color::Black).bg(Color::White)))
+        .expect("queued")
+        .flush()
+        .expect("flushed");
 
     let mut buffer = [0u8; 32];
     let mut rpos = 0;

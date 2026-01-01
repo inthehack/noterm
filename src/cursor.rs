@@ -5,26 +5,7 @@ use core::fmt;
 use crate::{Command, csi};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Action {
-    Home,
-    MoveTo { row: u16, column: u16 },
-    MoveUp(u16),
-    MoveDown(u16),
-    MoveRight(u16),
-    MoveLeft(u16),
-    MoveToColumn(u16),
-    MoveToRow(u16),
-    MoveToPreviousLine(u16),
-    MoveToNextLine(u16),
-    GetPosition,
-    SavePosition,
-    RestorePosition,
-    Hide,
-    Show,
-    DisableBlinking,
-    EnableBlinking,
-    SetCursorStyle(CursorStyle),
-}
+pub enum Action {}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CursorStyle {
@@ -54,40 +35,164 @@ impl fmt::Display for CursorStyle {
     }
 }
 
-impl Command for Action {
+pub struct Home;
+
+impl Command for Home {
     fn write(&self, writer: &mut impl fmt::Write) -> fmt::Result {
-        match *self {
-            Action::Home => writer.write_str(csi!("H")),
+        write!(writer, csi!("H"))
+    }
+}
 
-            Action::MoveTo { row, column } => write!(writer, csi!("{};{}H"), row + 1, column + 1),
-            Action::MoveUp(lines) if lines > 0 => write!(writer, csi!("{}A"), lines),
-            Action::MoveDown(lines) if lines > 0 => write!(writer, csi!("{}B"), lines),
-            Action::MoveRight(columns) if columns > 0 => write!(writer, csi!("{}C"), columns),
-            Action::MoveLeft(columns) if columns > 0 => write!(writer, csi!("{}D"), columns),
-            Action::MoveToColumn(column) => write!(writer, csi!("{}G"), column + 1),
-            Action::MoveToRow(row) => write!(writer, csi!("{}d"), row + 1),
-            Action::MoveToPreviousLine(lines) if lines > 0 => write!(writer, csi!("{}F"), lines),
-            Action::MoveToNextLine(lines) if lines > 0 => write!(writer, csi!("{}E"), lines),
+pub struct MoveTo(pub u16, pub u16);
 
-            Action::GetPosition => write!(writer, csi!("6n")),
+impl Command for MoveTo {
+    fn write(&self, writer: &mut impl fmt::Write) -> fmt::Result {
+        write!(writer, csi!("{};{}H"), self.1 + 1, self.0 + 1)
+    }
+}
 
-            Action::SavePosition => write!(writer, csi!("s")),
-            Action::RestorePosition => write!(writer, csi!("u")),
+pub struct MoveUp(pub u16);
 
-            Action::Hide => write!(writer, csi!("?25l")),
-            Action::Show => write!(writer, csi!("?25h")),
-
-            Action::DisableBlinking => write!(writer, csi!("?12l")),
-            Action::EnableBlinking => write!(writer, csi!("?12h")),
-
-            Action::SetCursorStyle(style) => write!(writer, "{}", style),
-
-            Action::MoveUp(_)
-            | Action::MoveDown(_)
-            | Action::MoveRight(_)
-            | Action::MoveLeft(_)
-            | Action::MoveToPreviousLine(_)
-            | Action::MoveToNextLine(_) => Ok(()),
+impl Command for MoveUp {
+    fn write(&self, writer: &mut impl fmt::Write) -> fmt::Result {
+        if self.0 > 0 {
+            write!(writer, csi!("{}A"), self.0)?;
         }
+        Ok(())
+    }
+}
+
+pub struct MoveDown(pub u16);
+
+impl Command for MoveDown {
+    fn write(&self, writer: &mut impl fmt::Write) -> fmt::Result {
+        if self.0 > 0 {
+            write!(writer, csi!("{}B"), self.0)?;
+        }
+        Ok(())
+    }
+}
+
+pub struct MoveRight(pub u16);
+
+impl Command for MoveRight {
+    fn write(&self, writer: &mut impl fmt::Write) -> fmt::Result {
+        if self.0 > 0 {
+            write!(writer, csi!("{}C"), self.0)?;
+        }
+        Ok(())
+    }
+}
+
+pub struct MoveLeft(pub u16);
+
+impl Command for MoveLeft {
+    fn write(&self, writer: &mut impl fmt::Write) -> fmt::Result {
+        if self.0 > 0 {
+            write!(writer, csi!("{}D"), self.0)?;
+        }
+        Ok(())
+    }
+}
+
+pub struct MoveToColumn(pub u16);
+
+impl Command for MoveToColumn {
+    fn write(&self, writer: &mut impl fmt::Write) -> fmt::Result {
+        write!(writer, csi!("{}G"), self.0)
+    }
+}
+
+pub struct MoveToRow(pub u16);
+
+impl Command for MoveToRow {
+    fn write(&self, writer: &mut impl fmt::Write) -> fmt::Result {
+        write!(writer, csi!("{}d"), self.0)
+    }
+}
+
+pub struct MoveToPreviousLine(pub u16);
+
+impl Command for MoveToPreviousLine {
+    fn write(&self, writer: &mut impl fmt::Write) -> fmt::Result {
+        if self.0 > 0 {
+            write!(writer, csi!("{}F"), self.0)?;
+        }
+        Ok(())
+    }
+}
+
+pub struct MoveToNextLine(pub u16);
+
+impl Command for MoveToNextLine {
+    fn write(&self, writer: &mut impl fmt::Write) -> fmt::Result {
+        if self.0 > 0 {
+            write!(writer, csi!("{}E"), self.0)?;
+        }
+        Ok(())
+    }
+}
+
+pub struct GetPosition;
+
+impl Command for GetPosition {
+    fn write(&self, writer: &mut impl fmt::Write) -> fmt::Result {
+        write!(writer, csi!("6n"))
+    }
+}
+
+pub struct SavePosition;
+
+impl Command for SavePosition {
+    fn write(&self, writer: &mut impl fmt::Write) -> fmt::Result {
+        write!(writer, csi!("s"))
+    }
+}
+
+pub struct RestorePosition;
+
+impl Command for RestorePosition {
+    fn write(&self, writer: &mut impl fmt::Write) -> fmt::Result {
+        write!(writer, csi!("u"))
+    }
+}
+
+pub struct Hide;
+
+impl Command for Hide {
+    fn write(&self, writer: &mut impl fmt::Write) -> fmt::Result {
+        write!(writer, csi!("?25l"))
+    }
+}
+
+pub struct Show;
+
+impl Command for Show {
+    fn write(&self, writer: &mut impl fmt::Write) -> fmt::Result {
+        write!(writer, csi!("?25h"))
+    }
+}
+
+pub struct DisableBlinking;
+
+impl Command for DisableBlinking {
+    fn write(&self, writer: &mut impl fmt::Write) -> fmt::Result {
+        write!(writer, csi!("?12l"))
+    }
+}
+
+pub struct EnableBlinking;
+
+impl Command for EnableBlinking {
+    fn write(&self, writer: &mut impl fmt::Write) -> fmt::Result {
+        write!(writer, csi!("?12h"))
+    }
+}
+
+pub struct SetCursorStyle(pub CursorStyle);
+
+impl Command for SetCursorStyle {
+    fn write(&self, writer: &mut impl fmt::Write) -> fmt::Result {
+        write!(writer, "{}", self.0)
     }
 }

@@ -1,20 +1,23 @@
 //! Style.
 
-use core::fmt;
+use core::{fmt, marker::PhantomData};
 
-pub use attributes::{Attribute, AttributeSet};
-pub use colors::Color;
-
-use crate::{Command, csi};
+use crate::{
+    Command, csi,
+    style::colors::{Background, Foreground, Underline},
+};
 
 pub mod attributes;
 pub mod colors;
+
+pub use attributes::{Attribute, AttributeSet};
+pub use colors::Color;
 
 pub struct SetBackgroundColor(pub Color);
 
 impl Command for SetBackgroundColor {
     fn write(&self, writer: &mut impl fmt::Write) -> fmt::Result {
-        write!(writer, csi!("{}m"), colors::Background(self.0))
+        write!(writer, csi!("{}m"), Background(self.0))
     }
 }
 
@@ -22,7 +25,7 @@ pub struct SetForegroundColor(pub Color);
 
 impl Command for SetForegroundColor {
     fn write(&self, writer: &mut impl fmt::Write) -> fmt::Result {
-        write!(writer, csi!("{}m"), colors::Foreground(self.0))
+        write!(writer, csi!("{}m"), Foreground(self.0))
     }
 }
 
@@ -30,15 +33,15 @@ pub struct SetUnderlineColor(pub Color);
 
 impl Command for SetUnderlineColor {
     fn write(&self, writer: &mut impl fmt::Write) -> fmt::Result {
-        write!(writer, csi!("{}m"), colors::Underline(self.0))
+        write!(writer, csi!("{}m"), Underline(self.0))
     }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Colors {
-    bg: Option<Color>,
-    fg: Option<Color>,
-    ul: Option<Color>,
+    pub bg: Option<Color>,
+    pub fg: Option<Color>,
+    pub ul: Option<Color>,
 }
 
 impl Colors {
@@ -52,14 +55,14 @@ pub struct SetColors(pub Colors);
 impl Command for SetColors {
     fn write(&self, writer: &mut impl fmt::Write) -> fmt::Result {
         match (self.0.fg, self.0.bg) {
-            (Some(fg), Some(bg)) => write!(writer, csi!("{};{}m"), fg, bg)?,
-            (Some(fg), None) => write!(writer, csi!("{}m"), fg)?,
-            (None, Some(bg)) => write!(writer, csi!("{}m"), bg)?,
+            (Some(fg), Some(bg)) => write!(writer, csi!("{};{}m"), Foreground(fg), Background(bg))?,
+            (Some(fg), None) => write!(writer, csi!("{}m"), Foreground(fg))?,
+            (None, Some(bg)) => write!(writer, csi!("{}m"), Background(bg))?,
             (None, None) => {}
         }
 
         if let Some(ul) = self.0.ul {
-            write!(writer, csi!("{}m"), ul)?;
+            write!(writer, csi!("{}m"), Underline(ul))?;
         }
 
         Ok(())
@@ -131,21 +134,23 @@ impl<ContentTy: fmt::Display> Command for Print<ContentTy> {
     }
 }
 
-pub struct StyledContent<ContentTy> {
-    style: Style,
+pub struct StyledContent<'a, ContentTy> {
     content: ContentTy,
+    style: Style,
+    _marker: PhantomData<&'a ()>,
 }
 
-impl<ContentTy> StyledContent<ContentTy> {
+impl<'a, ContentTy: 'a> StyledContent<'a, ContentTy> {
     pub fn new(content: ContentTy) -> Self {
         StyledContent {
-            style: Default::default(),
             content,
+            style: Default::default(),
+            _marker: PhantomData,
         }
     }
 }
 
-impl<ContentTy: fmt::Display> fmt::Display for StyledContent<ContentTy> {
+impl<ContentTy: fmt::Display> fmt::Display for StyledContent<'_, ContentTy> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         SetStyle(self.style).write(f)?;
         Print(&self.content).write(f)?;
@@ -174,16 +179,26 @@ pub trait AsStyleMut {
     fn style_mut(&mut self) -> &mut Style;
 }
 
-impl<ContentTy> AsStyle for StyledContent<ContentTy> {
+impl<ContentTy> AsStyle for StyledContent<'_, ContentTy> {
     fn style(&self) -> &Style {
         &self.style
     }
 }
 
-impl<ContentTy> AsStyleMut for StyledContent<ContentTy> {
+impl<ContentTy> AsStyleMut for StyledContent<'_, ContentTy> {
     fn style_mut(&mut self) -> &mut Style {
         &mut self.style
     }
+}
+
+macro_rules! stylized_attribute_impl {
+    ($method:ident, $attribute:path) => {
+        fn $method(self) -> Self::Styled {
+            let mut styled = self.stylize();
+            styled.style_mut().attributes.insert($attribute);
+            styled
+        }
+    };
 }
 
 pub trait Stylized: Sized {
@@ -191,19 +206,19 @@ pub trait Stylized: Sized {
 
     fn stylize(self) -> Self::Styled;
 
-    fn with(self, foreground: Color) -> Self::Styled {
+    fn fg(self, foreground: Color) -> Self::Styled {
         let mut styled = self.stylize();
         styled.style_mut().colors.fg = Some(foreground);
         styled
     }
 
-    fn on(self, background: Color) -> Self::Styled {
+    fn bg(self, background: Color) -> Self::Styled {
         let mut styled = self.stylize();
         styled.style_mut().colors.bg = Some(background);
         styled
     }
 
-    fn underline(self, underline: Color) -> Self::Styled {
+    fn ul(self, underline: Color) -> Self::Styled {
         let mut styled = self.stylize();
         styled.style_mut().colors.ul = Some(underline);
         styled
@@ -220,25 +235,40 @@ pub trait Stylized: Sized {
         styled.style_mut().attributes.extend(attributes);
         styled
     }
+
+    stylized_attribute_impl!(bold, Attribute::Bold);
+    stylized_attribute_impl!(dim, Attribute::Dimmed);
+    stylized_attribute_impl!(italic, Attribute::Italic);
+    stylized_attribute_impl!(underline, Attribute::Underlined);
+    stylized_attribute_impl!(strike, Attribute::Striked);
 }
 
-impl Stylized for &'static str {
-    type Styled = StyledContent<&'static str>;
+impl Stylized for char {
+    type Styled = StyledContent<'static, char>;
 
     fn stylize(self) -> Self::Styled {
         StyledContent::new(self)
     }
 }
 
-impl<const SIZE: usize> Stylized for heapless::String<SIZE> {
-    type Styled = StyledContent<heapless::String<SIZE>>;
+impl<'a> Stylized for &'a str {
+    type Styled = StyledContent<'a, &'a str>;
 
-    fn stylize(self) -> StyledContent<Self> {
+    fn stylize(self) -> Self::Styled {
         StyledContent::new(self)
     }
 }
 
-impl<ContentTy: fmt::Display> Stylized for StyledContent<ContentTy> {
+#[cfg(feature = "heapless")]
+impl<const SIZE: usize> Stylized for heapless::String<SIZE> {
+    type Styled = StyledContent<'static, heapless::String<SIZE>>;
+
+    fn stylize(self) -> StyledContent<'static, Self> {
+        StyledContent::new(self)
+    }
+}
+
+impl<ContentTy: fmt::Display> Stylized for StyledContent<'_, ContentTy> {
     type Styled = Self;
 
     fn stylize(self) -> Self::Styled {

@@ -58,52 +58,92 @@ pub enum Error {
     Unknown,
 }
 
-/// Action enums.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub enum Action {
-    ClearCursorDown,
-    ClearCursorUp,
-    ClearScreen,
-    ClearHistory,
-    ClearLineFromCursor,
-    ClearLineToCursor,
-    ClearLine,
-    ScrollUp(u16),
-    ScrollDown(u16),
-    SetSize { width: u16, height: u16 },
-    DisableLineWrapping,
-    EnableLineWrapping,
+pub enum ClearType {
+    All,
+    History,
+    CursorAndAbove,
+    CursorAndBelow,
+    Line,
+    LineFromCursor,
+    LineToCursor,
 }
 
-impl Command for Action {
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct Clear(pub ClearType);
+
+impl Command for Clear {
     fn write(&self, writer: &mut impl fmt::Write) -> fmt::Result {
-        match *self {
-            Action::ClearCursorDown => writer.write_str(csi!("J")),
-            Action::ClearCursorUp => writer.write_str(csi!("1J")),
-            Action::ClearScreen => writer.write_str(csi!("2J")),
-            Action::ClearHistory => writer.write_str(csi!("3J")),
-            Action::ClearLineFromCursor => writer.write_str(csi!("K")),
-            Action::ClearLineToCursor => writer.write_str(csi!("1K")),
-            Action::ClearLine => writer.write_str(csi!("2K")),
-
-            Action::ScrollUp(lines) if lines > 0 => write!(writer, csi!("{}S"), lines),
-            Action::ScrollDown(lines) if lines > 0 => write!(writer, csi!("{}T"), lines),
-
-            Action::SetSize { width, height } if width > 0 && height > 0 => {
-                write!(writer, csi!(""))
-            }
-
-            Action::DisableLineWrapping => write!(writer, csi!("?7l")),
-            Action::EnableLineWrapping => write!(writer, csi!("?7h")),
-
-            Action::ScrollUp(_)
-            | Action::ScrollDown(_)
-            | Action::SetSize {
-                width: _,
-                height: _,
-            } => Ok(()),
+        match self.0 {
+            ClearType::CursorAndBelow => write!(writer, csi!("J")),
+            ClearType::CursorAndAbove => write!(writer, csi!("1J")),
+            ClearType::All => write!(writer, csi!("2J")),
+            ClearType::History => write!(writer, csi!("3J")),
+            ClearType::LineFromCursor => write!(writer, csi!("K")),
+            ClearType::LineToCursor => write!(writer, csi!("1K")),
+            ClearType::Line => write!(writer, csi!("2K")),
         }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct ScrollUp(pub u16);
+
+impl Command for ScrollUp {
+    fn write(&self, writer: &mut impl fmt::Write) -> fmt::Result {
+        if self.0 > 0 {
+            write!(writer, csi!("{}S"), self.0)?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct ScrollDown(pub u16);
+
+impl Command for ScrollDown {
+    fn write(&self, writer: &mut impl fmt::Write) -> fmt::Result {
+        if self.0 > 0 {
+            write!(writer, csi!("{}T"), self.0)?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct SetSize(pub u16, pub u16);
+
+impl Command for SetSize {
+    fn write(&self, _writer: &mut impl fmt::Write) -> fmt::Result {
+        if self.0 > 0 && self.1 > 0 {
+            todo!()
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct DisableLineWrapping;
+
+impl Command for DisableLineWrapping {
+    fn write(&self, writer: &mut impl fmt::Write) -> fmt::Result {
+        write!(writer, csi!("?7l"))
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct EnableLineWrapping;
+
+impl Command for EnableLineWrapping {
+    fn write(&self, writer: &mut impl fmt::Write) -> fmt::Result {
+        write!(writer, csi!("?7h"))
     }
 }
 
@@ -128,7 +168,7 @@ mod tests {
 
     #[test]
     fn it_should_write_clear_all_action() {
-        let action = Action::ClearScreen;
+        let action = Clear(ClearType::All);
         let mut buffer = String::default();
 
         let result = buffer.execute(action);
@@ -138,7 +178,7 @@ mod tests {
 
     #[test]
     fn it_should_write_scroll_up_by_action() {
-        let action = Action::ScrollUp(32);
+        let action = ScrollUp(32);
         let mut buffer = String::default();
 
         let result = buffer.execute(action);

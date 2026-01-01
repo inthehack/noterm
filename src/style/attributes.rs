@@ -92,7 +92,7 @@ impl AttributeSet {
         self
     }
 
-    pub fn extend(&mut self, other: attributeSet) -> &mut Self {
+    pub fn extend(&mut self, other: AttributeSet) -> &mut Self {
         self.mask |= other.mask;
         self
     }

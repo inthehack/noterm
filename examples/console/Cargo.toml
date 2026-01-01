@@ -32,7 +32,11 @@ defmt = "1.0.1"
 defmt-rtt = "1.1.0"
 panic-probe = { version = "1.0.0", features = ["print-defmt"] }
 
-embassy-executor = { version = "0.9.1", features = ["arch-cortex-m", "executor-thread", "defmt"] }
+embassy-executor = { version = "0.9.1", features = [
+  "arch-cortex-m",
+  "executor-thread",
+  "defmt",
+] }
 embassy-futures = { version = "0.1.2", features = ["defmt"] }
 futures = { version = "0.3.31", default-features = false }
 

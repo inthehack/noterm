@@ -67,8 +67,22 @@ impl KeyEvent {
         self
     }
 
+    pub fn with_modifiers_maybe(mut self, modifiers_maybe: Option<KeyModifiers>) -> Self {
+        if let Some(modifiers) = modifiers_maybe {
+            self.modifiers |= modifiers;
+        }
+        self
+    }
+
     pub fn with_kind(mut self, kind: KeyEventKind) -> Self {
         self.kind = kind;
+        self
+    }
+
+    pub fn with_kind_maybe(mut self, kind_maybe: Option<KeyEventKind>) -> Self {
+        if let Some(kind) = kind_maybe {
+            self.kind = kind;
+        }
         self
     }
 
@@ -198,6 +212,48 @@ impl From<KeyCode> for KeyEvent {
             code,
             modifiers: KeyModifiers::empty(),
             kind: KeyEventKind::Pressed,
+        }
+    }
+}
+
+impl From<(KeyCode, KeyModifiers)> for KeyEvent {
+    fn from(value: (KeyCode, KeyModifiers)) -> Self {
+        KeyEvent::from(value.0).with_modifiers(value.1)
+    }
+}
+
+impl From<(KeyCode, Option<KeyModifiers>)> for KeyEvent {
+    fn from(value: (KeyCode, Option<KeyModifiers>)) -> Self {
+        KeyEvent::from(value.0).with_modifiers_maybe(value.1)
+    }
+}
+
+impl From<(KeyCode, KeyEventKind)> for KeyEvent {
+    fn from(value: (KeyCode, KeyEventKind)) -> Self {
+        KeyEvent::from(value.0).with_kind(value.1)
+    }
+}
+
+impl From<(KeyCode, Option<KeyEventKind>)> for KeyEvent {
+    fn from(value: (KeyCode, Option<KeyEventKind>)) -> Self {
+        KeyEvent::from(value.0).with_kind_maybe(value.1)
+    }
+}
+
+impl From<(KeyCode, (KeyModifiers, KeyEventKind))> for KeyEvent {
+    fn from(value: (KeyCode, (KeyModifiers, KeyEventKind))) -> Self {
+        KeyEvent::from(value.0)
+            .with_modifiers(value.1.0)
+            .with_kind(value.1.1)
+    }
+}
+
+impl From<(KeyCode, Option<(KeyModifiers, KeyEventKind)>)> for KeyEvent {
+    fn from(value: (KeyCode, Option<(KeyModifiers, KeyEventKind)>)) -> Self {
+        if let Some(key_modifiers_and_kind) = value.1 {
+            KeyEvent::from((value.0, key_modifiers_and_kind))
+        } else {
+            KeyEvent::from(value.0)
         }
     }
 }
