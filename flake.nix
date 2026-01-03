@@ -95,6 +95,10 @@
               cargo-nextest
               cargo-semver-checks
               clippy
+              flip-link
+
+              # Debug.
+              probe-rs-tools
 
               # Utilities.
               gh

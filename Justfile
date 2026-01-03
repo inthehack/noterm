@@ -16,6 +16,11 @@ help:
 build *OPTS:
     cargo build {{ OPTS }}
 
+# Run test suite.
+[group('quality')]
+test *OPTS:
+    cargo nextest run {{ OPTS }}
+
 # Clean the cargo build artifacts.
 [group('utility')]
 clean:
