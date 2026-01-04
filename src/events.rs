@@ -9,6 +9,7 @@ pub mod stream;
 pub use parser::parse;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Event {
     Cursor(CursorEvent),
     Key(KeyEvent),
@@ -42,11 +43,13 @@ impl Event {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum CursorEvent {
-    Updated { row: u16, column: u16 },
+    Positioned { x: u16, y: u16 },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct KeyEvent {
     pub code: KeyCode,
     pub modifiers: KeyModifiers,
@@ -147,6 +150,7 @@ impl KeyEvent {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum KeyCode {
     Backspace,
     Enter,
@@ -259,6 +263,7 @@ impl From<(KeyCode, Option<(KeyModifiers, KeyEventKind)>)> for KeyEvent {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum ModifierKeyCode {
     LeftShift,
     LeftControl,
@@ -282,19 +287,22 @@ impl From<ModifierKeyCode> for KeyEvent {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct KeyModifiers(u8);
+
 bitflags! {
-    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-    pub struct KeyModifiers: u8 {
+    impl KeyModifiers: u8 {
         const SHIFT = 1 << 0;
         const CONTROL = 1 << 1;
         const ALT = 1 << 2;
         const SUPER = 1 << 3;
         const META = 1 << 5;
-        const _ = !0;
     }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum KeyEventKind {
     Pressed,
     Released,
@@ -302,6 +310,7 @@ pub enum KeyEventKind {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum ScreenEvent {
     FocusGained,
     FocusLost,

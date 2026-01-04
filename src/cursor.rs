@@ -5,9 +5,6 @@ use core::fmt;
 use crate::{Command, csi};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Action {}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CursorStyle {
     Default,
     BlinkingBlock,
