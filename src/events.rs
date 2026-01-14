@@ -5,8 +5,8 @@ use bitflags::bitflags;
 pub mod parser;
 pub mod stream;
 
-// pub use parser::Parser;
 pub use parser::parse;
+pub use stream::stream;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]

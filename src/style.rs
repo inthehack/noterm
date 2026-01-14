@@ -259,7 +259,6 @@ impl<'a> Stylized for &'a str {
     }
 }
 
-#[cfg(feature = "heapless")]
 impl<const SIZE: usize> Stylized for heapless::String<SIZE> {
     type Styled = StyledContent<'static, heapless::String<SIZE>>;
 
