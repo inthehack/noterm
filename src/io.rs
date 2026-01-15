@@ -5,7 +5,7 @@ use core::fmt::Debug;
 pub mod blocking;
 
 /// Error.
-#[derive(Clone, Debug, thiserror::Error)]
+#[derive(Debug, PartialEq, Eq, Hash, thiserror::Error)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Error {
     /// Unknown error.

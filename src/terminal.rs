@@ -17,35 +17,38 @@ pub struct Size {
 }
 
 /// Terminal.
-#[derive(Clone, Debug)]
-pub struct Terminal<IO> {
-    io: IO,
+#[derive(Debug)]
+pub struct Terminal<'a, WriterTy> {
+    writer: &'a mut WriterTy,
     size: Size,
     cursor: (u16, u16),
 }
 
-impl<IO> Terminal<IO>
+impl<'a, WriterTy> Terminal<'a, WriterTy>
 where
-    IO: io::Read + io::Write,
+    WriterTy: io::blocking::Write,
 {
     /// Create a new terminal with the fiven I/O.
-    pub fn new(io: IO) -> Self {
-        Self::new_with_size(
-            io,
-            Size {
+    pub fn new(writer: &'a mut WriterTy) -> Self {
+        Terminal {
+            writer,
+            size: Size {
                 rows: 25,
                 columns: 80,
             },
-        )
+            cursor: (0, 0),
+        }
     }
 
     /// Create a new terminal with the given size.
-    pub fn new_with_size(io: IO, size: Size) -> Self {
-        Terminal {
-            io,
-            size,
-            cursor: (0, 0),
-        }
+    pub fn with_size(mut self, size: Size) -> Self {
+        self.size = size;
+        self
+    }
+
+    /// Get inner writer.
+    pub fn writer(&'a mut self) -> &'a mut WriterTy {
+        self.writer
     }
 }
 

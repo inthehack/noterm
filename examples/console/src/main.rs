@@ -1,8 +1,11 @@
 #![no_std]
 #![no_main]
 
+use core::pin::Pin;
+
 use embassy_executor::Spawner;
 use embassy_stm32 as hal;
+use futures::stream::StreamExt;
 
 use hal::bind_interrupts;
 use hal::mode::Async;
@@ -10,12 +13,12 @@ use hal::mode::Async;
 use {defmt_rtt as _, panic_probe as _};
 
 use noterm::cursor::{Home, MoveToNextLine};
-use noterm::style::{Color, Print};
+use noterm::events::{self, Event, KeyCode, KeyEvent, KeyModifiers};
+use noterm::style::{Color, Print, Stylized as _};
 use noterm::terminal::{Clear, ClearType};
+use noterm::{Executable as _, Queuable as _};
 
-use noterm::Queuable as _;
 use noterm::io::blocking::Write as _;
-use noterm::style::Stylized as _;
 
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
@@ -39,14 +42,16 @@ async fn main(_spawner: Spawner) {
         Uart::new(device)
     };
 
-    uart.queue(Clear(ClearType::All))
+    let (tx, rx) = uart.split();
+
+    tx.queue(Clear(ClearType::All))
         .expect("queued")
         .queue(Home)
         .expect("queued")
         .flush()
         .expect("flushed");
 
-    uart.queue(Print("Hello World".bold()))
+    tx.queue(Print("Hello World".bold()))
         .expect("queued")
         .queue(MoveToNextLine(2))
         .expect("queued")
@@ -55,58 +60,34 @@ async fn main(_spawner: Spawner) {
         .flush()
         .expect("flushed");
 
-    let mut buffer = [0u8; 32];
-    let mut rpos = 0;
-    let mut wpos = 0;
+    let inputs = events::stream(rx);
 
-    loop {
-        let Ok(amount) = uart.inner.read_until_idle(&mut buffer[wpos..]).await else {
+    while let Some(input) = inputs.next().await {
+        let Ok(event) = input else {
+            defmt::error!("failed to read input");
             continue;
         };
 
-        if amount == 0 {
-            continue;
-        }
+        defmt::println!("event: {}", event);
 
-        wpos += amount;
-
-        let Ok(mut input) = str::from_utf8(&buffer[rpos..wpos]) else {
-            wpos = 0;
-            rpos = 0;
-            continue;
-        };
-
-        loop {
-            if input.is_empty() {
-                wpos = 0;
-                rpos = 0;
-                break;
+        match event {
+            Event::Key(KeyEvent {
+                code: KeyCode::Char(c),
+                modifiers: _,
+                kind: _,
+            }) => {
+                uart.execute(Print(c)).expect("write char");
             }
 
-            let event = match noterm::events::parse(input) {
-                Ok((rest, event)) => {
-                    rpos += input.len() - rest.len();
+            Event::Key(KeyEvent {
+                code: KeyCode::Enter,
+                modifiers: _,
+                kind: _,
+            }) => {
+                uart.execute(MoveToNextLine(1)).expect("moved");
+            }
 
-                    input = rest;
-                    event
-                }
-
-                Err(nom::Err::Incomplete(_)) => {
-                    break;
-                }
-
-                Err(nom::Err::Error(_)) => {
-                    break;
-                }
-
-                Err(nom::Err::Failure(_)) => {
-                    wpos = 0;
-                    rpos = 0;
-                    break;
-                }
-            };
-
-            defmt::println!("event: {:?}", defmt::Debug2Format(&event));
+            _ => {}
         }
     }
 }
@@ -123,6 +104,11 @@ impl<'a> Uart<'a> {
     pub fn new(inner: hal::usart::Uart<'a, Async>) -> Self {
         Uart { inner }
     }
+
+    pub fn split(self) -> (UartTx<'a>, UartRx<'a>) {
+        let (tx, rx) = self.inner.split();
+        (UartTx::new(tx), UartRx::new(rx))
+    }
 }
 
 impl noterm::io::Read for Uart<'_> {
@@ -138,6 +124,52 @@ impl noterm::io::Read for Uart<'_> {
 }
 
 impl noterm::io::blocking::Write for Uart<'_> {
+    fn write(&mut self, buffer: &[u8]) -> noterm::io::Result<usize> {
+        let _ = embassy_futures::block_on(self.inner.write(buffer));
+        Ok(buffer.len())
+    }
+
+    fn flush(&mut self) -> noterm::io::Result<()> {
+        if embassy_futures::block_on(self.inner.flush()).is_err() {
+            return Err(noterm::io::Error::Unknown);
+        }
+        Ok(())
+    }
+}
+
+struct UartRx<'a> {
+    pub inner: hal::usart::UartRx<'a, Async>,
+}
+
+impl<'a> UartRx<'a> {
+    pub fn new(inner: hal::usart::UartRx<'a, Async>) -> Self {
+        UartRx { inner }
+    }
+}
+
+impl noterm::io::Read for UartRx<'_> {
+    async fn read(&mut self, buffer: &mut [u8]) -> noterm::io::Result<usize> {
+        let amount = self
+            .inner
+            .read_until_idle(buffer)
+            .await
+            .map_err(|_| noterm::io::Error::Unknown)?;
+
+        Ok(amount)
+    }
+}
+
+struct UartTx<'a> {
+    pub inner: hal::usart::UartTx<'a, Async>,
+}
+
+impl<'a> UartTx<'a> {
+    pub fn new(inner: hal::usart::UartTx<'a, Async>) -> Self {
+        UartTx { inner }
+    }
+}
+
+impl noterm::io::blocking::Write for UartTx<'_> {
     fn write(&mut self, buffer: &[u8]) -> noterm::io::Result<usize> {
         let _ = embassy_futures::block_on(self.inner.write(buffer));
         Ok(buffer.len())

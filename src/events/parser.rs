@@ -181,7 +181,7 @@ pub(crate) fn parse_xterm_csi_cursor_escape_code(input: &str) -> IResult<&str, C
         ),
         char('R'),
     )
-    .map(|(row, column)| CursorEvent::Updated { row, column })
+    .map(|(y, x)| CursorEvent::Positioned { x, y })
     .parse(input)
 }
 
