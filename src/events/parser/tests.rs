@@ -86,3 +86,17 @@ fn it_should_parse_single_event(#[case] input: &str, #[case] expected: Event) {
         .map(|(_, second)| second)
         .is_equal_to(expected);
 }
+
+#[rstest]
+#[case::digit("0", Event::Key(KeyEvent::from(KeyCode::Char('0'))))]
+#[case::lower("a", Event::Key(KeyEvent::from(KeyCode::Char('a'))))]
+#[case::upper(
+    "A",
+    Event::Key(KeyEvent::from(KeyCode::Char('a')).with_modifiers(KeyModifiers::SHIFT))
+)]
+fn it_should_parse_utf8_text(#[case] input: &str, #[case] expected: Event) {
+    assert_that!(parse(input))
+        .is_ok()
+        .map(|(_, second)| second)
+        .is_equal_to(expected);
+}

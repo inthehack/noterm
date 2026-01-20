@@ -26,7 +26,6 @@ pub fn parse(input: &str) -> IResult<&str, Event> {
         parse_xterm_ss3_escape_code,
         parse_xterm_csi_escape_code,
         map(parse_xterm_ctrl_escape_code, Event::Key),
-        map(parse_xterm_csi_cursor_escape_code, Event::Cursor),
         map(parse_kitty_csi_escape_code, Event::Key),
         // Must be last before utf-8 catch-all, otherwise it catches part of valid patterns
         // without ALT modifiers.
