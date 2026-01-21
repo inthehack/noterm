@@ -19,9 +19,6 @@ use crate::events::{
 mod tests;
 
 pub fn parse(input: &str) -> IResult<&str, Event> {
-    #[cfg(feature = "defmt")]
-    defmt::debug!("parse input: {}", input.as_bytes());
-
     alt((
         parse_xterm_ss3_escape_code,
         parse_xterm_csi_escape_code,
