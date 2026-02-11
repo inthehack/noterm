@@ -47,3 +47,15 @@ impl<WriterTy: Write> Write for &mut WriterTy {
         WriterTy::flush(*self)
     }
 }
+
+#[cfg(feature = "std")]
+impl Write for String {
+    fn write(&mut self, data: &[u8]) -> Result<usize> {
+        self.push_str(str::from_utf8(data).unwrap());
+        Ok(data.len())
+    }
+
+    fn flush(&mut self) -> Result<()> {
+        Ok(())
+    }
+}

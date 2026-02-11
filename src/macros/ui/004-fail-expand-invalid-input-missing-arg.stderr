@@ -1,0 +1,5 @@
+error: 1 positional argument in format string, but no arguments were given
+ --> src/macros/ui/004-fail-expand-invalid-input-missing-arg.rs:3:43
+  |
+3 |     noterm::print!(output, "missing value {}");
+  |                                           ^^

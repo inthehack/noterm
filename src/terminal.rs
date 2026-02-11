@@ -158,17 +158,6 @@ mod tests {
 
     use super::*;
 
-    impl crate::io::blocking::Write for String {
-        fn write(&mut self, data: &[u8]) -> io::Result<usize> {
-            self.push_str(str::from_utf8(data).unwrap());
-            Ok(data.len())
-        }
-
-        fn flush(&mut self) -> io::Result<()> {
-            Ok(())
-        }
-    }
-
     #[test]
     fn it_should_write_clear_all_action() {
         let action = Clear(ClearType::All);
