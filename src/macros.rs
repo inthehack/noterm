@@ -13,7 +13,7 @@ macro_rules! csi {
 
 #[macro_export]
 macro_rules! print {
-    ($output:expr, $fmt:literal $(, $($args:expr),*)? $(,)?) => {{
+    ($output:expr, $fmt:expr $(, $($args:expr),*)? $(,)?) => {{
         use $crate::Executable;
         use $crate::io::blocking::Write;
         use $crate::style::Print;
