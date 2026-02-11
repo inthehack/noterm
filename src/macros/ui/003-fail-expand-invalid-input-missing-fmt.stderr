@@ -1,0 +1,11 @@
+error: unexpected end of macro invocation
+ --> src/macros/ui/003-fail-expand-invalid-input-missing-fmt.rs:3:26
+  |
+3 |     noterm::print!(output);
+  |                          ^ missing tokens in macro arguments
+  |
+note: while trying to match `,`
+ --> src/macros.rs
+  |
+  |     ($output:expr, $fmt:literal $(, $($args:expr),*)? $(,)?) => {{
+  |                  ^
