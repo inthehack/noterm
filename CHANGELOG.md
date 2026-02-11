@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0](https://github.com/inthehack/noterm/compare/v0.1.1...v0.2.0) - 2026-02-11
+
+### Added
+
+- add `print` and `println` macros for formatted strings ([#3](https://github.com/inthehack/noterm/pull/3))
+
 ## [0.1.1](https://github.com/inthehack/noterm/compare/v0.1.0...v0.1.1) - 2026-01-26
 
 ### Added
