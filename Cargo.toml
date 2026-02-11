@@ -9,6 +9,9 @@ repository = "https://github.com/inthehack/noterm"
 description = "noterm, a no_std terminal handler."
 readme = "README.md"
 
+[features]
+std = []
+
 [dependencies]
 bitflags = "2.10.0"
 defmt = { version = "1.0.1", optional = true }

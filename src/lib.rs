@@ -1,6 +1,6 @@
 //! noterm, a no-std crate for interacting with terminal.
 
-#![cfg_attr(not(test), no_std)]
+#![cfg_attr(not(any(test, feature = "std")), no_std)]
 
 use core::fmt;
 
