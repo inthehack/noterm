@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1](https://github.com/inthehack/noterm/compare/v0.2.0...v0.2.1) - 2026-02-11
+
+### Fixed
+
+- support macro expr as fmt literal
+
 ## [0.2.0](https://github.com/inthehack/noterm/compare/v0.1.1...v0.2.0) - 2026-02-11
 
 ### Added
