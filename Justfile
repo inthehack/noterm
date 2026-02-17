@@ -19,7 +19,7 @@ build *OPTS:
 # Run test suite.
 [group('quality')]
 test *OPTS:
-    cargo nextest run {{ OPTS }}
+    cargo nextest run -F std {{ OPTS }}
 
 # Clean the cargo build artifacts.
 [group('utility')]

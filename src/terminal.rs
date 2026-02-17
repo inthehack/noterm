@@ -152,6 +152,9 @@ impl Command for EnableLineWrapping {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(not(feature = "std"))]
+    compile_error!("missing feature std to run tests");
+
     use speculoos::prelude::*;
 
     use crate::Executable;
