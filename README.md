@@ -1,4 +1,4 @@
-# noshell
+# noterm
 
 [![crates.io](https://img.shields.io/crates/d/noterm.svg)](https://crates.io/crates/noterm)
 [![crates.io](https://img.shields.io/crates/v/noterm.svg)](https://crates.io/crates/noterm)
